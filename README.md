@@ -3,6 +3,13 @@
 Animated isometric pixel dioramas you can turn, zoom, and point at. Each Place is a small data
 file on top of a shared engine.
 
+## Play
+
+- [Dunder Mifflin, Scranton](https://calebsylvest.github.io/pixel-places/places/office/)
+- [Noah's Ark](https://calebsylvest.github.io/pixel-places/places/ark/)
+
+The site is published from `main` with GitHub Pages; every push updates it.
+
 ## Run it
 
 ```sh
