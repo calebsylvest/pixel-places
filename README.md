@@ -8,6 +8,7 @@ file on top of a shared engine.
 - [Dunder Mifflin, Scranton](https://calebsylvest.github.io/pixel-places/places/office/)
 - [Noah's Ark](https://calebsylvest.github.io/pixel-places/places/ark/)
 - [Van Gogh's Bedroom](https://calebsylvest.github.io/pixel-places/places/bedroom/)
+- [Monticello](https://calebsylvest.github.io/pixel-places/places/monticello/)
 
 The site is published from `main` with GitHub Pages; every push updates it.
 
@@ -24,13 +25,15 @@ The pages use ES modules, so they need to be served (opening the files directly 
 
 ```
 engine/
-  render.js   software renderer: projection, depth buffer, shapes, materials (incl. brushstrokes),
+  render.js   software renderer: projection, depth buffer, shapes (incl. any 4-cornered patch),
+              materials (incl. brushstrokes),
               shadows, contour outlines, colour grade, time-of-day tint, cloud shadows
   figure.js   people built from dithered spheres (clothes, robes, beards, head coverings, poses, held items)
   beast.js    animals from a species spec: four-legged, bird, hopper, tortoise and snake body plans
   agents.js   people who walk between tasks; a place's brain() decides what each does next
-  nav.js      walkable grid + A* paths
-  build.js    walls (grid-aligned or at any angle) with doors and cutaways, panels, glass, signs
+  nav.js      walkable grid, A* paths, and a reachability check
+  build.js    walls (grid-aligned or at any angle) with doors and cutaways, panels, glass, signs,
+              and rasterPlan: walls generated from a traced floor plan (rooms + doors + windows)
   app.js      mount(place): HUD, pan/zoom/turn, hover descriptions, roster panel, scene tabs/switching
   style.css   shared HUD styling
 places/
@@ -38,6 +41,8 @@ places/
   ark/        Noah's Ark at Genesis 6 dimensions: outside (boarding) plus three decks
               species.js is the animal roster; ark.js the hull, decks and routines
   bedroom/    Van Gogh's bedroom in Arles: a trapezoid room, painterly materials, a day cycle
+  monticello/ Monticello c. 1815: plan.js is the first floor traced from the HABS drawings
+              (references/, public domain); monticello.js the exterior, interior and household
   forum/      (local only, not in the repo) the original Forum Romanum reference file
 ```
 
@@ -98,6 +103,10 @@ List the rooms, walls, doors, furniture and seats as numbers in metres, measured
 Every later fix was easy where this existed (`STATIONS`, `SPOTS`, `SPECIES`), and slow where
 coordinates were scattered through drawing code.
 
+For a building with real drawings, trace room outlines (and door and window openings) and let
+`rasterPlan` work out the walls; check the trace as an ASCII map before rendering anything. In
+Monticello, a room rectangle drawn 10 cm narrower than the footprint produced a phantom wall.
+
 ### 4. Choose the scale from the smallest thing that matters
 
 `S` (pixels per metre) is a trade-off between the whole place fitting on screen and small things
@@ -116,9 +125,9 @@ Furniture and plants blocked doors at least five times in The Office.
 
 - Keep doors at least 0.8 m wide.
 - Add decorative clutter last.
-- After every layout change, check that every destination is reachable with `crowd.nav.find(...)` in
-  the console (see the reachability check used during the Office build). This is worth turning into
-  an engine helper.
+- After every layout change, check that every destination is reachable:
+  `__place.crowd.nav.unreachable(x, y, { name: [x, y], ... })` in the console lists the spots that
+  can't be walked to from (x, y). It caught sealed doors in The Office and in Monticello.
 
 ### 6. Look at it in the browser after every step
 

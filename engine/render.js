@@ -258,6 +258,37 @@ function shadowOnly(x, y, z, ax, ay, az, bx, by, bz, mask) {
     }
 }
 /**
+ * Any four-cornered surface (corners as [x, y, z]; p01 === p11 makes a triangle), sampled
+ * bilinearly: p00 -> p10 is u, p00 -> p01 is v. The normal comes from the corner order
+ * (u × v) unless given. For hip roofs, pediments, domes and other non-rectangular faces.
+ */
+export function patch(p00, p10, p01, p11, mat, normal) {
+  if (!mat) return;
+  const ax = p10[0] - p00[0], ay = p10[1] - p00[1], az = p10[2] - p00[2], bx = p01[0] - p00[0], by = p01[1] - p00[1], bz = p01[2] - p00[2];
+  let n = normal;
+  if (!n) {
+    const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx, l = Math.hypot(cx, cy, cz) || 1;
+    n = [cx / l, cy / l, cz / l];
+  }
+  const [facing, light] = shadeN(n[0], n[1], n[2]);
+  const back = facing <= 0.02 && n[2] < 0.3;
+  const lu = Math.max(Math.hypot(ax, ay, az), Math.hypot(p11[0] - p01[0], p11[1] - p01[1], p11[2] - p01[2]));
+  const lv = Math.max(Math.hypot(bx, by, bz), Math.hypot(p11[0] - p10[0], p11[1] - p10[1], p11[2] - p10[2]));
+  const step = back ? HMC * 1.5 : STEP, nu = Math.max(1, Math.ceil(lu / step)), nv = Math.max(1, Math.ceil(lv / step));
+  for (let i = 0; i <= nu; i++) {
+    const p = i / nu;
+    const x0 = p00[0] + (p10[0] - p00[0]) * p, y0 = p00[1] + (p10[1] - p00[1]) * p, z0 = p00[2] + (p10[2] - p00[2]) * p;
+    const x1 = p01[0] + (p11[0] - p01[0]) * p, y1 = p01[1] + (p11[1] - p01[1]) * p, z1 = p01[2] + (p11[2] - p01[2]) * p;
+    for (let j = 0; j <= nv; j++) {
+      const q = j / nv, x = x0 + (x1 - x0) * q, y = y0 + (y1 - y0) * q, z = z0 + (z1 - z0) * q;
+      if (back) {
+        const xa = x - CX, ya = y - CY;
+        heightAt(C * xa + Sn * ya, -Sn * xa + C * ya, z);
+      } else putM(x, y, z, mat, light, p * lu, q * lv);
+    }
+  }
+}
+/**
  * A parallelogram from corner (x,y,z) spanned by edge vectors a and b, with outward normal n.
  * u runs along a and v along b, in metres. mask(u, v) can cut holes.
  */

@@ -156,3 +156,141 @@ export function sign(face, c, mid, zBottom, lines, fg, o = {}) {
 /** Two materials stacked: below `at` metres (v) use a, above use b. */
 export const mStack = (at, a, b) => (l, u, v, px, py) => (v < at ? a : b)(l, u, v, px, py);
 export { rgb };
+
+// ---- walls from a traced floor plan ------------------------------------------------------------
+/** Point-in-polygon (polygon as [[x, y], ...]). */
+export function inPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+/**
+ * Build walls from a floor plan instead of drawing each one. Everything inside the footprint that
+ * isn't a room (or a door) becomes wall, so angled and octagonal rooms come out right. Outer walls
+ * are full height where they face away from the camera and cut down where they face it; inner
+ * walls are cut down so the rooms can be seen.
+ *
+ * o = { cell (m, default 0.1), bounds:[x0,y0,x1,y1], footprint: polygon, rooms: [{ key, poly }],
+ *       openings: [{ rect:[x0,y0,x1,y1], kind: "door" | "window", sill, head }],
+ *       h (full height), cut (near outer walls), inner (inner walls), mat, top, glass, nav,
+ *       dryRun (classify only, draw nothing) }
+ * Returns { roomAt(x, y) } for colouring floors.
+ */
+export function rasterPlan(o) {
+  const c = o.cell ?? 0.1, [bx0, by0, bx1, by1] = o.bounds;
+  const nx = Math.ceil((bx1 - bx0) / c), ny = Math.ceil((by1 - by0) / c);
+  const T = new Uint8Array(nx * ny); // 0 outside, 1 wall, 2 room, 3 window, 4 door
+  const RM = new Int16Array(nx * ny).fill(-1);
+  const cx = (i) => bx0 + (i + 0.5) * c, cy = (j) => by0 + (j + 0.5) * c;
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const x = cx(i), y = cy(j), k = j * nx + i;
+      if (!inPoly(x, y, o.footprint)) continue;
+      T[k] = 1;
+      for (let r = 0; r < o.rooms.length; r++)
+        if (inPoly(x, y, o.rooms[r].poly)) {
+          T[k] = 2;
+          RM[k] = r;
+          break;
+        }
+    }
+  for (const op of o.openings || []) {
+    const [x0, y0, x1, y1] = op.rect;
+    for (let j = Math.max(0, Math.floor((y0 - by0) / c)); j < Math.min(ny, Math.ceil((y1 - by0) / c)); j++)
+      for (let i = Math.max(0, Math.floor((x0 - bx0) / c)); i < Math.min(nx, Math.ceil((x1 - bx0) / c)); i++) {
+        const k = j * nx + i;
+        if (T[k] === 1) T[k] = op.kind === "window" ? 3 : 4;
+      }
+  }
+  // outer walls: spread "faces outward in direction n" from cells touching the outside, a few cells deep
+  const OUT = new Int8Array(nx * ny * 2), dist = new Uint8Array(nx * ny).fill(255), q = [];
+  const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      if (T[k] !== 1 && T[k] !== 3) continue;
+      let ox = 0, oy = 0;
+      for (const [di, dj] of N4) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= nx || b >= ny || T[b * nx + a] === 0) (ox += di), (oy += dj);
+      }
+      if (ox || oy) {
+        OUT[2 * k] = Math.sign(ox);
+        OUT[2 * k + 1] = Math.sign(oy);
+        dist[k] = 0;
+        q.push(k);
+      }
+    }
+  for (let h = 0; h < q.length; h++) {
+    const k = q[h], i = k % nx, j = (k / nx) | 0;
+    if (dist[k] >= (o.depth ?? 7)) continue;
+    for (const [di, dj] of N4) {
+      const a = i + di, b = j + dj;
+      if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
+      const m = b * nx + a;
+      if ((T[m] === 1 || T[m] === 3) && dist[m] === 255) {
+        dist[m] = dist[k] + 1;
+        OUT[2 * m] = OUT[2 * k];
+        OUT[2 * m + 1] = OUT[2 * k + 1];
+        q.push(m);
+      }
+    }
+  }
+  // height class per wall cell: 1 = full, 2 = cut (outer near), 3 = inner
+  const H = new Uint8Array(nx * ny);
+  for (let k = 0; k < nx * ny; k++) {
+    if (T[k] !== 1 && T[k] !== 3) continue;
+    if (dist[k] === 255) H[k] = 3;
+    else H[k] = facesCamera(OUT[2 * k], OUT[2 * k + 1]) ? 2 : 1;
+  }
+  const heights = { 1: o.h, 2: o.cut ?? 1.0, 3: o.inner ?? o.cut ?? 1.2 };
+  // greedy rectangles of identical (type, height) cells
+  const used = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      if (used[k] || (T[k] !== 1 && T[k] !== 3)) continue;
+      const lab = T[k] * 10 + H[k];
+      let w = 1;
+      while (i + w < nx && !used[k + w] && T[k + w] * 10 + H[k + w] === lab) w++;
+      let hgt = 1;
+      grow: for (; j + hgt < ny; hgt++) {
+        for (let a = 0; a < w; a++) {
+          const m = (j + hgt) * nx + i + a;
+          if (used[m] || T[m] * 10 + H[m] !== lab) break grow;
+        }
+      }
+      for (let b = 0; b < hgt; b++) for (let a = 0; a < w; a++) used[(j + b) * nx + i + a] = 1;
+      const x0 = bx0 + i * c, y0 = by0 + j * c, x1 = x0 + w * c, y1 = y0 + hgt * c, top = heights[H[k]];
+      if (o.dryRun) continue;
+      if (T[k] === 3) {
+        const sill = o.sill ?? 0.9, head = Math.min(top, o.head ?? 3.2);
+        box(x0, y0, 0, x1, y1, Math.min(sill, top), o.top, o.mat);
+        if (top > sill) {
+          if (o.glass) box(x0, y0, sill, x1, y1, head, null, o.glass);
+          if (top > head) box(x0, y0, head, x1, y1, top, o.top, o.mat);
+        }
+      } else box(x0, y0, 0, x1, y1, top, o.top, o.mat);
+      if (o.nav) o.nav.block(x0, y0, x1, y1, o.grow ?? 0.1);
+    }
+  return {
+    roomAt(x, y) {
+      const i = Math.floor((x - bx0) / c), j = Math.floor((y - by0) / c);
+      if (i < 0 || j < 0 || i >= nx || j >= ny) return null;
+      const r = RM[j * nx + i];
+      return r >= 0 ? o.rooms[r] : null;
+    },
+    /** Wall height class at a point: 0 none, 1 full, 2 cut (outer, near), 3 inner. For debugging. */
+    heightClassAt(x, y) {
+      const i = Math.floor((x - bx0) / c), j = Math.floor((y - by0) / c);
+      return i < 0 || j < 0 || i >= nx || j >= ny ? 0 : H[j * nx + i];
+    },
+    typeAt(x, y) {
+      const i = Math.floor((x - bx0) / c), j = Math.floor((y - by0) / c);
+      return i < 0 || j < 0 || i >= nx || j >= ny ? 0 : T[j * nx + i];
+    },
+  };
+}

@@ -50,6 +50,29 @@ export class Nav {
         }
     return null;
   }
+  /**
+   * Which of the named points can be walked to from (x, y)? Returns the names that can't, so a
+   * layout can be checked after every change: nav.unreachable(hallX, hallY, { desk: [x, y], ... }).
+   */
+  unreachable(x, y, points) {
+    const nx = this.nx, ny = this.ny, seen = new Uint8Array(nx * ny), s = this.nearestOpen(x, y);
+    if (!s) return Object.keys(points);
+    const q = [s[1] * nx + s[0]];
+    seen[q[0]] = 1;
+    while (q.length) {
+      const k = q.pop(), i = k % nx, j = (k / nx) | 0;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
+        const m = b * nx + a;
+        if (!seen[m] && this.walk[m]) (seen[m] = 1), q.push(m);
+      }
+    }
+    return Object.keys(points).filter((name) => {
+      const n = this.nearestOpen(points[name][0], points[name][1]);
+      return !n || !seen[n[1] * nx + n[0]];
+    });
+  }
   /** Straight segment clear of blocked cells? */
   clear(ax, ay, bx, by) {
     const d = Math.hypot(bx - ax, by - ay), n = Math.ceil(d / (this.cell * 0.5));
