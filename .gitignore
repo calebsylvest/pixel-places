@@ -1,0 +1,7 @@
+# Third-party files kept locally for reference, not ours to publish
+places/forum/
+dunder-mifflin.png
+
+# Local tooling
+.claude/settings.local.json
+.DS_Store
