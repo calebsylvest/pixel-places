@@ -53,6 +53,36 @@ export function wall(x0, y0, x1, y1, o) {
   return full;
 }
 
+/**
+ * A straight wall slab between any two floor points (not just along the grid), for rooms that
+ * aren't rectangular. o = { h, t (thickness), inner, outer, top (materials), side: 1 or -1 (which
+ * side of a->b is the room: 1 = left of the direction a->b), mask(u, v) for openings on the inner
+ * face (u runs from a to b), nav }.
+ */
+export function wallLine(ax, ay, bx, by, o) {
+  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+  const side = o.side ?? 1, nx = -uy * side, ny = ux * side; // normal pointing into the room
+  const t = o.t ?? 0.2, h = o.h, ox = -nx * t, oy = -ny * t;
+  // inner face, seen from the room: u runs a -> b if the room is on the left of a->b, else b -> a
+  if (side > 0) quad(bx, by, 0, -dx, -dy, 0, 0, 0, h, nx, ny, 0, o.inner, o.mask && ((u, v) => o.mask(len - u, v)));
+  else quad(ax, ay, 0, dx, dy, 0, 0, 0, h, nx, ny, 0, o.inner, o.mask);
+  // outer face
+  if (side > 0) quad(ax + ox, ay + oy, 0, dx, dy, 0, 0, 0, h, -nx, -ny, 0, o.outer || o.inner, o.mask);
+  else quad(bx + ox, by + oy, 0, -dx, -dy, 0, 0, 0, h, -nx, -ny, 0, o.outer || o.inner, o.mask && ((u, v) => o.mask(len - u, v)));
+  // top and the two ends
+  if (o.top) quad(ax, ay, h, dx, dy, 0, ox, oy, 0, 0, 0, 1, o.top);
+  const end = o.outer || o.inner;
+  quad(ax + ox, ay + oy, 0, -ox, -oy, 0, 0, 0, h, -ux, -uy, 0, end);
+  quad(bx, by, 0, ox, oy, 0, 0, 0, h, ux, uy, 0, end);
+  if (o.nav) {
+    const n = Math.ceil(len / 0.1);
+    for (let i = 0; i <= n; i++) {
+      const x = ax + (dx * i) / n + ox / 2, y = ay + (dy * i) / n + oy / 2;
+      if (!o.mask || !o.navGap || !o.navGap((i / n) * len)) o.nav.block(x - 0.05, y - 0.05, x + 0.05, y + 0.05, o.grow ?? 0.12);
+    }
+  }
+}
+
 /** Glass: faint diagonal glints, otherwise see-through. Draw both faces; casts no shadow. */
 export function mGlass(tint = [200, 224, 236]) {
   const r = rampOf(tint);

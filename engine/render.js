@@ -15,6 +15,7 @@ let STEP = 0.03, EDGE = 0.15, GRADIENT_Y = 0;
 let LX = -0.22, LY = 0.39, LZ = 1, LB = 1.45, LK = 2.15;
 let SHADE_GROUND = [0.62, 0.6, 0.78], SHADE_OBJ = [0.8, 0.79, 0.9];
 let HM0 = 0, HMC = 0.1, HMN = 0;
+let OUTLINE = 0; // packed contour colour, or 0 for the default soft edge shading
 
 export let image, pix, zb, ids;
 let bakedPix, bakedZ, ground, groundZ, shadowMask, staticShadow, pz, lit, hm;
@@ -93,6 +94,19 @@ export function mBands(c, period, frac = 0.2, depth = 0.7, vertical = false, bia
     return r[clamp(Math.floor(l + bias - (t - Math.floor(t) < frac ? depth : 0) + dz(px, py, 0.35)), 0, 4)];
   };
 }
+/**
+ * Painterly brushstrokes: short dabs of length `len` and width `w` (metres) laid along u (or v),
+ * each a little lighter or darker. Gives surfaces the hatched look of an oil painting.
+ */
+export function mStroke(c, len = 0.12, w = 0.03, amp = 0.9, alongV = false, bias = 0) {
+  const r = rampOf(c);
+  return (l, u, v, px, py) => {
+    const a = alongV ? v : u, b = alongV ? u : v;
+    const i = Math.floor(b / w), off = hash(i, 7.3) * len, j = Math.floor((a + off) / len), t = (a + off) / len - j;
+    const h = hash(i * 1.31, j * 2.17), edge = t < 0.08 ? -0.35 : 0;
+    return r[clamp(Math.floor(l + bias + amp * (h - 0.5) + edge + (bayerAt(px, py) - 0.5) * 0.3), 0, 4)];
+  };
+}
 /** Combine: pick material by a predicate on the surface coords. */
 export const mSplit = (test, a, b) => (l, u, v, px, py) => (test(u, v) ? a : b)(l, u, v, px, py);
 
@@ -156,6 +170,7 @@ export function configure(o) {
   SHADE_OBJ = o.shadeObj || [0.8, 0.79, 0.9];
   STEP = Math.min(0.11, 0.62 / S);
   EDGE = o.edge ?? 0.15;
+  OUTLINE = o.outline ? rgb(...o.outline) : 0;
   GRADIENT_Y = COS / (S * SIN);
   HMC = o.hmCell ?? Math.max(0.05, 2 / S);
   const reach = Math.max(x1 - x0, y1 - y0) / 2 + top * Math.max(Math.abs(SHX), Math.abs(SHY)) + 2;
@@ -394,11 +409,11 @@ function shadeEdges() {
       const k = y * W + x, d = zb[k];
       if (d < -1e8 || d === groundZ[k]) continue;
       const up = k - W, dn = k + W, lf = k - 1, rt = k + 1;
-      if (zb[up] === groundZ[up] || zb[dn] === groundZ[dn] || zb[lf] === groundZ[lf] || zb[rt] === groundZ[rt]) tint(k, 0.68, 0.66, 0.76);
+      if (zb[up] === groundZ[up] || zb[dn] === groundZ[dn] || zb[lf] === groundZ[lf] || zb[rt] === groundZ[rt]) OUTLINE ? (pix[k] = OUTLINE) : tint(k, 0.68, 0.66, 0.76);
       else if (d - zb[up] - GRADIENT_Y > EDGE || d - zb[lf] > EDGE) {
         const c = pix[k];
         pix[k] = rgb(lerp(255 & c, WARM[0], 0.42), lerp((c >> 8) & 255, WARM[1], 0.38), lerp((c >> 16) & 255, WARM[2], 0.22));
-      } else if (zb[rt] - d > EDGE || zb[dn] - GRADIENT_Y - d > EDGE) tint(k, 0.74, 0.72, 0.82);
+      } else if (zb[rt] - d > EDGE || zb[dn] - GRADIENT_Y - d > EDGE) OUTLINE ? (pix[k] = OUTLINE) : tint(k, 0.74, 0.72, 0.82);
     }
 }
 function bakeOcclusion() {
@@ -538,25 +553,34 @@ function buildVignette(vw, vh) {
       vig[y * vw + x] = Math.round(256 * (1 - (0.28 * Math.floor(6 * n + bayerAt(x, y))) / 6));
     }
 }
-function postFX(vx, vy, vw, vh) {
+function postFX(vx, vy, vw, vh, amb) {
   if (vigW !== vw || vigH !== vh) buildVignette(vw, vh);
+  const ar = amb ? Math.round(amb[0] * 256) : 256, ag = amb ? Math.round(amb[1] * 256) : 256, ab = amb ? Math.round(amb[2] * 256) : 256;
   for (let y = KY0; y < KY1; y++) {
     const row = (y - vy) * vw - vx;
     for (let x = KX0, k = y * W + KX0; x < KX1; x++, k++) {
       if (zb[k] < -1e8) continue;
       const c = pix[k], r = 255 & c, g = (c >> 8) & 255, b = (c >> 16) & 255, l = (77 * r + 150 * g + 29 * b) >> 8, h = 3 * l;
-      const R = GRADE[384 + l + ((146 * (r - l)) >> 7)] + SPLIT[h], G = GRADE[384 + l + ((146 * (g - l)) >> 7)] + SPLIT[h + 1], B = GRADE[384 + l + ((146 * (b - l)) >> 7)] + SPLIT[h + 2];
+      let R = GRADE[384 + l + ((146 * (r - l)) >> 7)] + SPLIT[h], G = GRADE[384 + l + ((146 * (g - l)) >> 7)] + SPLIT[h + 1], B = GRADE[384 + l + ((146 * (b - l)) >> 7)] + SPLIT[h + 2];
       const m = vig[row + x];
+      if (amb) {
+        R = (R * ar) >> 8;
+        G = (G * ag) >> 8;
+        B = (B * ab) >> 8;
+      }
       pix[k] = (0xff000000 | (CL[384 + ((B * m) >> 8) + ((256 - m) >> 5)] << 16) | (CL[384 + ((G * m) >> 8)] << 8) | CL[384 + ((R * m) >> 8)]) >>> 0;
     }
   }
 }
-/** Finish the frame: moving shadows, edge shading, grade, and blit to the 2D context. */
-export function endFrame(ctx, vx, vy, vw, vh) {
+/**
+ * Finish the frame: moving shadows, edge shading, grade, and blit to the 2D context.
+ * amb = optional [r, g, b] light multipliers (1 = unchanged) for time of day.
+ */
+export function endFrame(ctx, vx, vy, vw, vh, amb) {
   flushShadows();
   applyShadows();
   shadeEdges();
-  postFX(vx, vy, vw, vh);
+  postFX(vx, vy, vw, vh, amb);
   if (vx < 0 || vy < 0 || vx + vw > W || vy + vh > H) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, vw, vh);

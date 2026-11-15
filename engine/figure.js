@@ -1,7 +1,9 @@
 // People built from dithered spheres and capsules, in metres. A figure is
 // { x, y, z, yaw, k (height scale), girth, look, pose, item }.
 // look: { skin, hair, hairStyle, top, shirt, tie, bottom, skirt, shoes, glasses,
-//         robe (ankle-length garment), sash, mantle (cloak over the back), beard, beardLen, headwrap, veil }
+//         robe (ankle-length garment), sash, mantle (cloak over the back), beard, beardLen, headwrap, veil,
+//         hat (brimmed), hatBrim, beret, pipe }
+// pose.lie lays the figure on its back: (x, y) is then the feet and yaw points to the head.
 // pose: { sit, stance (walk swing -1..1), armR, armL (swing angles), type, phone, present, headTurn }
 import { capsule, pendingShadows } from "./render.js";
 
@@ -9,8 +11,10 @@ export function drawPerson(f) {
   const cs = Math.cos(f.yaw), sn = Math.sin(f.yaw);
   const ox = f.x, oy = f.y, k = f.k || 1, z0 = f.z || 0, g = f.girth || 1;
   // local frame: fw = forward, sd = to the figure's left, up = height (metres before scaling)
-  const P = (fw, sd, up) => [ox + (cs * fw - sn * sd) * k, oy + (sn * fw + cs * sd) * k, z0 + up * k];
   const L = f.look, pose = f.pose || {};
+  const P = pose.lie
+    ? (fw, sd, up) => [ox + (cs * up - sn * sd) * k, oy + (sn * up + cs * sd) * k, z0 + (fw + 0.17) * k]
+    : (fw, sd, up) => [ox + (cs * fw - sn * sd) * k, oy + (sn * fw + cs * sd) * k, z0 + up * k];
   const seg = (a, b, r0, r1, col) => {
     capsule(a, b, r0 * k, r1 * k, col);
     pendingShadows.push(a, r0 * k, b, r1 * k);
@@ -70,6 +74,19 @@ export function drawPerson(f) {
     seg(P(hf - 0.02, 0, head + 0.04), P(hf - 0.02, 0, head + 0.04), 0.13, 0.13, L.headwrap);
     if (L.veil) seg(P(hf - 0.08, 0, head), P(hf - 0.12, 0, sh - 0.08), 0.12, 0.15, L.headwrap);
   } else hair(P, seg, L, head, hf);
+  if (L.hat) {
+    const br = L.hatBrim ?? 0.21;
+    seg(P(hf - 0.02, 0, head + 0.1), P(hf - 0.02, 0, head + 0.16), 0.115, 0.1, L.hat);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      seg(P(hf - 0.02 + Math.cos(a) * br, Math.sin(a) * br, head + 0.07), P(hf - 0.02 + Math.cos(a) * br, Math.sin(a) * br, head + 0.07), 0.05, 0.05, L.hat);
+    }
+  }
+  if (L.beret) seg(P(hf - 0.03, 0.03, head + 0.1), P(hf - 0.05, -0.04, head + 0.11), 0.115, 0.11, L.beret);
+  if (L.pipe) {
+    seg(P(hf + 0.11, 0.035, head - 0.07), P(hf + 0.2, 0.04, head - 0.1), 0.014, 0.014, [70, 50, 40]);
+    seg(P(hf + 0.21, 0.04, head - 0.09), P(hf + 0.21, 0.04, head - 0.06), 0.03, 0.03, L.pipe);
+  }
   if (L.beard) seg(P(hf + 0.07, 0, head - 0.07), P(hf + 0.09, 0, head - 0.07 - (L.beardLen ?? 0.12)), 0.075, 0.05, L.beard);
   if (L.glasses) seg(P(hf + 0.1, 0, head + 0.01), P(hf + 0.1, 0, head + 0.01), 0.04, 0.04, L.glasses);
   // arms

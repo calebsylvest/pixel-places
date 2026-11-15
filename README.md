@@ -7,6 +7,7 @@ file on top of a shared engine.
 
 - [Dunder Mifflin, Scranton](https://calebsylvest.github.io/pixel-places/places/office/)
 - [Noah's Ark](https://calebsylvest.github.io/pixel-places/places/ark/)
+- [Van Gogh's Bedroom](https://calebsylvest.github.io/pixel-places/places/bedroom/)
 
 The site is published from `main` with GitHub Pages; every push updates it.
 
@@ -23,18 +24,20 @@ The pages use ES modules, so they need to be served (opening the files directly 
 
 ```
 engine/
-  render.js   software renderer: projection, depth buffer, shapes, materials, shadows, colour grade
+  render.js   software renderer: projection, depth buffer, shapes, materials (incl. brushstrokes),
+              shadows, contour outlines, colour grade, time-of-day tint, cloud shadows
   figure.js   people built from dithered spheres (clothes, robes, beards, head coverings, poses, held items)
   beast.js    animals from a species spec: four-legged, bird, hopper, tortoise and snake body plans
   agents.js   people who walk between tasks; a place's brain() decides what each does next
   nav.js      walkable grid + A* paths
-  build.js    walls with doors and cutaway heights, wall panels, glass, pixel-snapped signs
+  build.js    walls (grid-aligned or at any angle) with doors and cutaways, panels, glass, signs
   app.js      mount(place): HUD, pan/zoom/turn, hover descriptions, roster panel, scene tabs/switching
   style.css   shared HUD styling
 places/
   office/     Dunder Mifflin, Scranton (layout traced from a fan-drawn floorplan, not included)
   ark/        Noah's Ark at Genesis 6 dimensions: outside (boarding) plus three decks
               species.js is the animal roster; ark.js the hull, decks and routines
+  bedroom/    Van Gogh's bedroom in Arles: a trapezoid room, painterly materials, a day cycle
   forum/      (local only, not in the repo) the original Forum Romanum reference file
 ```
 

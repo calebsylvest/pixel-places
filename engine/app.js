@@ -13,6 +13,7 @@
 //     people(crowd),                           // add agents (once)
 //     update(dt, crowd, ctx),                  // optional per-frame logic (events)
 //     overlay(clock),                          // optional per-frame drawing (e.g. glows)
+//     ambient(clock) -> [r, g, b],             // optional light multipliers (time of day)
 //     roster: true,                            // list people in the side panel
 //     story: { paras: [...] },                 // optional text for the side panel
 //   } },
@@ -352,7 +353,7 @@ export function mount(place) {
     R.beginFrame(vx, vy, VW, VH);
     crowd.draw();
     if (scene.overlay) scene.overlay(crowd.clock);
-    R.endFrame(ctx, vx, vy, VW, VH);
+    R.endFrame(ctx, vx, vy, VW, VH, scene.ambient ? scene.ambient(crowd.clock) : null);
   }
   const frameErrors = new Set();
   function start() {
