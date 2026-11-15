@@ -3,6 +3,7 @@
 //
 // place = {
 //   title, subtitle, start: "sceneKey",
+//   home: "../../",                            // optional: where the "all places" link goes
 //   scenes: { key: {
 //     title, subtitle,                         // HUD text while in this scene
 //     view: { S, bounds:[x0,y0,x1,y1], top, below, shadow, light, edge, shadeGround, shadeObj },
@@ -156,7 +157,7 @@ export function mount(place) {
       for (const a of crowd.list) crowd.settle(a);
       for (let i = 0; i < 30; i++) step(0.1);
     }
-    title.innerHTML = `<b>${esc(scene.title || place.title)}</b><span>${esc(scene.subtitle || place.subtitle || "")}</span>`;
+    title.innerHTML = `<a id="home" href="${esc(place.home || "../../")}">&larr; all places</a><b>${esc(scene.title || place.title)}</b><span>${esc(scene.subtitle || place.subtitle || "")}</span>`;
     $("back").hidden = k === place.start || !!place.menu;
     levels.querySelectorAll("button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.scene === k)));
     $("back").innerHTML = `&larr; back to ${esc(place.scenes[place.start].short || place.scenes[place.start].title || "start")}`;

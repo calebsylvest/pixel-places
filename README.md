@@ -9,6 +9,7 @@ file on top of a shared engine.
 - [Noah's Ark](https://calebsylvest.github.io/pixel-places/places/ark/)
 - [Van Gogh's Bedroom](https://calebsylvest.github.io/pixel-places/places/bedroom/)
 - [Monticello](https://calebsylvest.github.io/pixel-places/places/monticello/)
+- [Fallingwater](https://calebsylvest.github.io/pixel-places/places/fallingwater/)
 
 The site is published from `main` with GitHub Pages; every push updates it.
 
@@ -43,6 +44,8 @@ places/
   bedroom/    Van Gogh's bedroom in Arles: a trapezoid room, painterly materials, a day cycle
   monticello/ Monticello c. 1815: plan.js is the first floor traced from the HABS drawings
               (references/, public domain); monticello.js the exterior, interior and household
+  fallingwater/ Fallingwater c. 1940: plan.js traces all three floors from the HABS drawings
+              (references/); fallingwater.js the site, the house, the floors and the weekend
   forum/      (local only, not in the repo) the original Forum Romanum reference file
 ```
 
@@ -107,6 +110,13 @@ For a building with real drawings, trace room outlines (and door and window open
 `rasterPlan` work out the walls; check the trace as an ASCII map before rendering anything. In
 Monticello, a room rectangle drawn 10 cm narrower than the footprint produced a phantom wall.
 
+Not every building is rooms inside walls. Fallingwater is stone piers, glass and cantilevered trays,
+so its trace lists those directly (`stone`, `glass`, `terraces` with parapet edges), and the cutaway
+keeps a wall full height only where it is an outside wall on the far side of the floor.
+
+For a site that isn't flat, describe the ground as a height function (stream bed, ledges, hill),
+sample it once into a grid, and draw it as sloped patches; the same grid gives people their footing.
+
 ### 4. Choose the scale from the smallest thing that matters
 
 `S` (pixels per metre) is a trade-off between the whole place fitting on screen and small things
@@ -127,7 +137,8 @@ Furniture and plants blocked doors at least five times in The Office.
 - Add decorative clutter last.
 - After every layout change, check that every destination is reachable:
   `__place.crowd.nav.unreachable(x, y, { name: [x, y], ... })` in the console lists the spots that
-  can't be walked to from (x, y). It caught sealed doors in The Office and in Monticello.
+  can't be walked to from (x, y). It caught sealed doors in The Office, Monticello and Fallingwater.
+- Don't block the spot someone sits on: a stool's nav block made its own seat unreachable.
 
 ### 6. Look at it in the browser after every step
 
@@ -137,6 +148,8 @@ Screenshots caught problems that reading the code didn't:
 - a hull lit from behind
 - tabs hidden under the canvas
 - a crash that froze a whole deck
+- a house lit from behind again: `light.dir` and `shadow` are relative to the view, not compass
+  directions, so copy them from a Place that looks right
 
 Check every turn of the camera and every scene, read the console for errors, and use the
 `__place` console hooks to jump the clock forward or move the camera.

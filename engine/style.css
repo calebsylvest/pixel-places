@@ -8,6 +8,9 @@ body { font: 13px/1.4 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
 #title { position: fixed; top: max(14px, env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 2px; pointer-events: none; }
 #title b { font-size: 16px; font-weight: 600; letter-spacing: .02em; }
 #title span { color: var(--muted); }
+#home { pointer-events: auto; justify-self: start; color: var(--muted); text-decoration: none; padding: 6px 10px; margin: -6px -10px 0; }
+#home:hover, #home:focus-visible { color: var(--ink); }
+#home:focus-visible { outline: 1px dashed var(--ink); outline-offset: -4px; }
 #bottom { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(14px, env(safe-area-inset-bottom, 0px)); display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
 #info { display: grid; gap: 2px; max-width: 52ch; min-width: 0; }
 #info b { font-weight: 600; }
